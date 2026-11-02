@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -134,11 +135,19 @@ fun ItemRow(
                 else
                     MaterialTheme.colorScheme.onSurface
             )
-            Text(
-                text = (formatQty(item.quantity) + " " + item.unit).bn(),
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary
-            )
+            if (item.quantity > 0) {
+                Text(
+                    text = (formatQty(item.quantity) + " " + item.unit).bn(),
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                Text(
+                    text = "পরিমাণ দিন",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
             IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Default.Delete,
@@ -151,7 +160,11 @@ fun ItemRow(
 }
 
 @Composable
-fun EmptyState(message: String) {
+fun EmptyState(
+    message: String,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
+) {
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         verticalArrangement = Arrangement.Center,
@@ -165,6 +178,10 @@ fun EmptyState(message: String) {
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
+        if (actionLabel != null && onAction != null) {
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = onAction) { Text(actionLabel) }
+        }
     }
 }
 
@@ -181,12 +198,18 @@ fun ItemDialog(
 ) {
     val keepOpen = initial == null
     var name by remember { mutableStateOf(initial?.name ?: "") }
-    var qty by remember { mutableStateOf(initial?.let { formatQty(it.quantity) } ?: "1") }
+    var qty by remember {
+        mutableStateOf(initial?.let { if (it.quantity > 0) formatQty(it.quantity) else "" } ?: "1")
+    }
     var unit by remember { mutableStateOf(initial?.unit ?: UNITS.first()) }
     var addedCount by remember { mutableIntStateOf(0) }
-    val focus = remember { FocusRequester() }
+    val nameFocus = remember { FocusRequester() }
+    val qtyFocus = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    // Notun item hole nam-e, edit hole (jemon demo list-e quantity dite) quantity-te cursor jabe
+    LaunchedEffect(Unit) {
+        runCatching { if (keepOpen) nameFocus.requestFocus() else qtyFocus.requestFocus() }
+    }
 
     val matches = remember(name, suggestions) {
         val q = name.trim()
@@ -198,13 +221,14 @@ fun ItemDialog(
     fun submit() {
         val n = name.trim()
         if (n.isEmpty()) return
-        val q = qty.toDoubleOrNull()?.takeIf { it > 0 } ?: 1.0
+        // Notun item-e quantity khali thakle 1; edit-e khali mane "quantity deya hoyni" (0)
+        val q = qty.toDoubleOrNull()?.takeIf { it > 0 } ?: if (keepOpen) 1.0 else 0.0
         onSave(n, q, unit)
         if (keepOpen) {
             addedCount++
             name = ""
             qty = "1"
-            runCatching { focus.requestFocus() }
+            runCatching { nameFocus.requestFocus() }
         }
     }
 
@@ -228,7 +252,7 @@ fun ItemDialog(
                     onValueChange = { name = it },
                     label = { Text("আইটেমের নাম (যেমন: আলু)") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth().focusRequester(focus)
+                    modifier = Modifier.fillMaxWidth().focusRequester(nameFocus)
                 )
                 if (matches.isNotEmpty()) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -243,7 +267,7 @@ fun ItemDialog(
                     label = { Text("পরিমাণ") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().focusRequester(qtyFocus)
                 )
                 Text("একক", style = MaterialTheme.typography.labelLarge)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
