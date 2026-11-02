@@ -1,3 +1,4 @@
+
 package com.bajarlist.app
 
 import android.app.Application
@@ -22,6 +23,34 @@ class BajarViewModel(app: Application) : AndroidViewModel(app) {
     var tab by mutableIntStateOf(0)
     var date by mutableStateOf(LocalDate.now())
     var month by mutableStateOf(YearMonth.now())
+
+    init {
+        // Prothombar app khulle ei mashe-r monthly demo list ready kore dey
+        if (!storage.isSeeded()) {
+            val monthKey = YearMonth.now().toString()
+            if (items.none { it.type == TYPE_MONTHLY && it.key == monthKey }) {
+                addTemplate(monthKey)
+                tab = 1
+            }
+            storage.setSeeded()
+        }
+    }
+
+    private fun addTemplate(monthKey: String): Int {
+        val existing = items
+            .filter { it.type == TYPE_MONTHLY && it.key == monthKey }
+            .map { it.name.trim().lowercase() }
+            .toSet()
+        val toAdd = MONTHLY_TEMPLATE.filter { it.first.lowercase() !in existing }
+        val base = System.currentTimeMillis()
+        update(items + toAdd.mapIndexed { i, (name, unit) ->
+            BazarItem(base + i, name, 0.0, unit, false, TYPE_MONTHLY, monthKey)
+        })
+        return toAdd.size
+    }
+
+    /** Ekhon dekha mash-e demo list load kore. Koyta notun item holo ta return kore. */
+    fun loadMonthlyTemplate(): Int = addTemplate(month.toString())
 
     val type: String get() = if (tab == 0) TYPE_DAILY else TYPE_MONTHLY
     val key: String get() = if (tab == 0) date.toString() else month.toString()
