@@ -90,9 +90,10 @@ fun BajarApp(vm: BajarViewModel = viewModel()) {
     }
 
     fun buildPdf(): File? {
-        val list = vm.currentItems
+        // Shudhu jegulor quantity deya hoyeche segulo PDF-e jabe
+        val list = vm.currentItems.filter { it.quantity > 0 }
         if (list.isEmpty()) {
-            say("তালিকা খালি — আগে আইটেম যোগ করুন")
+            say("PDF-এর জন্য অন্তত একটি আইটেমের পরিমাণ দিন")
             return null
         }
         return PdfExporter.create(context, vm.pdfTitle(), vm.periodLabel(), list, vm.pdfFileName())
@@ -114,6 +115,7 @@ fun BajarApp(vm: BajarViewModel = viewModel()) {
 
     val list = vm.currentItems
     val boughtCount = list.count { it.bought }
+    val unsetCount = list.count { it.quantity <= 0 }
 
     Scaffold(
         topBar = {
@@ -141,6 +143,19 @@ fun BajarApp(vm: BajarViewModel = viewModel()) {
                                 text = { Text("PDF শেয়ার") },
                                 onClick = { menuOpen = false; sharePdf() }
                             )
+                            if (vm.tab == 1) {
+                                DropdownMenuItem(
+                                    text = { Text("মাসের ডেমো তালিকা লোড") },
+                                    onClick = {
+                                        menuOpen = false
+                                        val n = vm.loadMonthlyTemplate()
+                                        say(
+                                            if (n > 0) "${n.toString().bn()} টি আইটেম যোগ হয়েছে"
+                                            else "সব আইটেম আগে থেকেই আছে"
+                                        )
+                                    }
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text(if (vm.tab == 0) "গতকালের তালিকা কপি" else "গত মাসের তালিকা কপি") },
                                 onClick = {
@@ -219,13 +234,23 @@ fun BajarApp(vm: BajarViewModel = viewModel()) {
                             .fillMaxWidth()
                             .padding(top = 6.dp)
                     )
+                    if (unsetCount > 0) {
+                        Text(
+                            "পরিমাণ দেওয়া হয়নি: ${unsetCount.toString().bn()} টি (PDF-এ আসবে না)",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
                 }
             }
 
             if (list.isEmpty()) {
                 EmptyState(
-                    if (vm.tab == 0) "আজকের বাজারের তালিকা খালি।\nনিচের “আইটেম যোগ” চাপুন।"
-                    else "এই মাসের বাজারের তালিকা খালি।\nনিচের “আইটেম যোগ” চাপুন।"
+                    message = if (vm.tab == 0) "আজকের বাজারের তালিকা খালি।\nনিচের “আইটেম যোগ” চাপুন।"
+                    else "এই মাসের বাজারের তালিকা খালি।\nডেমো তালিকা লোড করুন, অথবা নিচের “আইটেম যোগ” চাপুন।",
+                    actionLabel = if (vm.tab == 1) "ডেমো তালিকা লোড করুন" else null,
+                    onAction = if (vm.tab == 1) ({ vm.loadMonthlyTemplate() }) else null
                 )
             } else {
                 LazyColumn(
