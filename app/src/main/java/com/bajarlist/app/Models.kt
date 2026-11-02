@@ -10,7 +10,27 @@ const val TYPE_MONTHLY = "MONTHLY"
 /** Quantity-r unit gulo. Chaile ekhane notun unit jog korte paren. */
 val UNITS = listOf(
     "কেজি", "গ্রাম", "লিটার", "মিলি", "পিস",
-    "হালি", "ডজন", "প্যাকেট", "কৌটা", "বান্ডিল"
+    "হালি", "ডজন", "প্যাকেট", "কৌটা", "বান্ডিল", "বোতল"
+)
+
+/**
+ * মাসিক বাজারের ডেমো তালিকা (নাম to ডিফল্ট unit).
+ * Quantity 0 mane "ekhono quantity deya hoyni" - eigulo PDF-e ashbe na.
+ */
+val MONTHLY_TEMPLATE: List<Pair<String, String>> = listOf(
+    "চাল" to "কেজি",
+    "ডাল" to "কেজি",
+    "পেঁয়াজ" to "কেজি",
+    "রসুন" to "কেজি",
+    "আদা" to "গ্রাম",
+    "সয়াবিন তেল" to "লিটার",
+    "সরিষার তেল" to "লিটার",
+    "চিনি" to "কেজি",
+    "চা পাতা (বেঙ্গল টি)" to "গ্রাম",
+    "গুঁড়া দুধ" to "গ্রাম",
+    "চাকা ওয়াশিং পাউডার" to "প্যাকেট",
+    "ফিক্সল" to "বোতল",
+    "সাবান (কেয়া)" to "পিস"
 )
 
 data class BazarItem(
@@ -57,6 +77,12 @@ class Storage(context: Context) {
         } catch (e: Exception) {
             emptyList()
         }
+    }
+
+    fun isSeeded(): Boolean = prefs.getBoolean("seeded_v1", false)
+
+    fun setSeeded() {
+        prefs.edit().putBoolean("seeded_v1", true).apply()
     }
 
     fun save(items: List<BazarItem>) {
