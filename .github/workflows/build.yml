@@ -20,6 +20,16 @@ jobs:
         with:
           gradle-version: 8.7
 
+      - name: Download handwriting font (Atma, OFL license)
+        run: |
+          mkdir -p app/src/main/assets/fonts
+          F=app/src/main/assets/fonts
+          curl -fL --retry 3 -o $F/hand.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/atma/Atma-Medium.ttf || curl -fL --retry 3 -o $F/hand.ttf https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/atma/Atma-Medium.ttf
+          curl -fL --retry 3 -o $F/hand_bold.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/atma/Atma-Bold.ttf || curl -fL --retry 3 -o $F/hand_bold.ttf https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/atma/Atma-Bold.ttf
+          ls -l $F
+          test $(stat -c %s $F/hand.ttf) -gt 50000
+          test $(stat -c %s $F/hand_bold.ttf) -gt 50000
+
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon
 
