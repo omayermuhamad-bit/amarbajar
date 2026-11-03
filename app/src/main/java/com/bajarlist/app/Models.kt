@@ -14,9 +14,28 @@ val UNITS = listOf(
 )
 
 /**
- * মাসিক বাজারের ডেমো তালিকা (নাম to ডিফল্ট unit).
- * Quantity 0 mane "ekhono quantity deya hoyni" - eigulo PDF-e ashbe na.
+ * দৈনিক বাজারের শুরুর আইটেম (নাম to ডিফল্ট unit).
+ * Eta shudhu prothombar-er jonno; Settings theke jekono shomoy bodlano jay.
  */
+val DAILY_TEMPLATE: List<Pair<String, String>> = listOf(
+    "আলু" to "কেজি",
+    "পেঁয়াজ" to "কেজি",
+    "টমেটো" to "কেজি",
+    "কাঁচা মরিচ" to "গ্রাম",
+    "ধনিয়া পাতা" to "গ্রাম",
+    "লেবু" to "হালি",
+    "বেগুন" to "কেজি",
+    "শসা" to "কেজি",
+    "সবজি" to "কেজি",
+    "ডিম" to "হালি",
+    "মাছ" to "কেজি",
+    "মুরগি" to "কেজি",
+    "গরুর মাংস" to "কেজি",
+    "দুধ" to "লিটার",
+    "পাউরুটি" to "প্যাকেট"
+)
+
+/** মাসিক বাজারের শুরুর আইটেম (নাম to ডিফল্ট unit). */
 val MONTHLY_TEMPLATE: List<Pair<String, String>> = listOf(
     // চাল, ডাল, আটা
     "চাল" to "কেজি",
@@ -72,6 +91,15 @@ val MONTHLY_TEMPLATE: List<Pair<String, String>> = listOf(
     "ঝাড়ু" to "পিস"
 )
 
+/** Settings-er "shob item" talikar ek item. type = TYPE_DAILY ba TYPE_MONTHLY */
+data class CatalogItem(
+    val id: Long,
+    val name: String,
+    val unit: String,
+    val type: String
+)
+
+/** Kono ekta din / mash-er jonno ekta item-er poriman. */
 data class BazarItem(
     val id: Long,
     val name: String,
@@ -84,6 +112,9 @@ data class BazarItem(
     val key: String
 )
 
+/** Nam milanor jonno: age-pichher space ar boro/chhoto hater farak bad. */
+fun normName(s: String): String = s.trim().lowercase()
+
 /** 2.0 -> "2", 1.5 -> "1.5" */
 fun formatQty(q: Double): String =
     if (q % 1.0 == 0.0) q.toLong().toString() else q.toString().trimEnd('0').trimEnd('.')
@@ -92,6 +123,13 @@ fun formatQty(q: Double): String =
 fun String.bn(): String = buildString {
     for (c in this@bn) {
         append(if (c in '0'..'9') '০' + (c - '0') else c)
+    }
+}
+
+/** Bangla digit (০-৯) ke English digit e convert kore, jate poriman thikmoto porha jay. */
+fun String.enDigits(): String = buildString {
+    for (c in this@enDigits) {
+        append(if (c in '০'..'৯') '0' + (c - '০') else c)
     }
 }
 
@@ -118,12 +156,6 @@ class Storage(context: Context) {
         }
     }
 
-    fun isSeeded(): Boolean = prefs.getBoolean("seeded_v1", false)
-
-    fun setSeeded() {
-        prefs.edit().putBoolean("seeded_v1", true).apply()
-    }
-
     fun save(items: List<BazarItem>) {
         val arr = JSONArray()
         items.forEach {
@@ -139,5 +171,38 @@ class Storage(context: Context) {
             )
         }
         prefs.edit().putString("items", arr.toString()).apply()
+    }
+
+    /** Settings-er item talika. Ekdom prothombar hole null. */
+    fun loadCatalog(): List<CatalogItem>? {
+        val raw = prefs.getString("catalog", null) ?: return null
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                CatalogItem(
+                    id = o.getLong("id"),
+                    name = o.getString("name"),
+                    unit = o.getString("unit"),
+                    type = o.getString("type")
+                )
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun saveCatalog(list: List<CatalogItem>) {
+        val arr = JSONArray()
+        list.forEach {
+            arr.put(
+                JSONObject()
+                    .put("id", it.id)
+                    .put("name", it.name)
+                    .put("unit", it.unit)
+                    .put("type", it.type)
+            )
+        }
+        prefs.edit().putString("catalog", arr.toString()).apply()
     }
 }
