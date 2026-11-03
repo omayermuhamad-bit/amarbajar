@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
@@ -27,12 +28,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -45,8 +44,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -69,16 +68,26 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BajarApp(vm: BajarViewModel = viewModel()) {
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+    if (showSettings) {
+        SettingsScreen(vm = vm, onBack = { showSettings = false })
+    } else {
+        MainScreen(vm = vm, onOpenSettings = { showSettings = true })
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MainScreen(vm: BajarViewModel, onOpenSettings: () -> Unit) {
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
     var menuOpen by remember { mutableStateOf(false) }
     var showAdd by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf<BazarItem?>(null) }
+    var editingRow by remember { mutableStateOf<ListRow?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
 
@@ -89,9 +98,14 @@ fun BajarApp(vm: BajarViewModel = viewModel()) {
         }
     }
 
+    val rows = vm.rows
+    val setCount = rows.count { it.quantity > 0 }
+
     fun buildPdf(): File? {
-        // Shudhu jegulor quantity deya hoyeche segulo PDF-e jabe
-        val list = vm.currentItems.filter { it.quantity > 0 }
+        // Shudhu jegulor poriman deya hoyeche segulo PDF-e jabe
+        val list = rows.filter { it.quantity > 0 }.map {
+            BazarItem(it.catalogId, it.name, it.quantity, it.unit, false, vm.type, vm.key)
+        }
         if (list.isEmpty()) {
             say("PDF-এর জন্য অন্তত একটি আইটেমের পরিমাণ দিন")
             return null
@@ -113,10 +127,6 @@ fun BajarApp(vm: BajarViewModel = viewModel()) {
         FileActions.share(context, file, vm.pdfTitle())
     }
 
-    val list = vm.currentItems
-    val boughtCount = list.count { it.bought }
-    val unsetCount = list.count { it.quantity <= 0 }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -129,6 +139,9 @@ fun BajarApp(vm: BajarViewModel = viewModel()) {
                 actions = {
                     IconButton(onClick = { sharePdf() }) {
                         Icon(Icons.Default.Share, contentDescription = "PDF শেয়ার")
+                    }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "সেটিংস")
                     }
                     Box {
                         IconButton(onClick = { menuOpen = true }) {
@@ -143,32 +156,24 @@ fun BajarApp(vm: BajarViewModel = viewModel()) {
                                 text = { Text("PDF শেয়ার") },
                                 onClick = { menuOpen = false; sharePdf() }
                             )
-                            if (vm.tab == 1) {
-                                DropdownMenuItem(
-                                    text = { Text("মাসের ডেমো তালিকা লোড") },
-                                    onClick = {
-                                        menuOpen = false
-                                        val n = vm.loadMonthlyTemplate()
-                                        say(
-                                            if (n > 0) "${n.toString().bn()} টি আইটেম যোগ হয়েছে"
-                                            else "সব আইটেম আগে থেকেই আছে"
-                                        )
-                                    }
-                                )
-                            }
                             DropdownMenuItem(
-                                text = { Text(if (vm.tab == 0) "গতকালের তালিকা কপি" else "গত মাসের তালিকা কপি") },
+                                text = {
+                                    Text(
+                                        if (vm.tab == 0) "গতকালের পরিমাণ কপি"
+                                        else "গত মাসের পরিমাণ কপি"
+                                    )
+                                },
                                 onClick = {
                                     menuOpen = false
                                     val n = vm.copyFromPrevious()
                                     say(
-                                        if (n > 0) "${n.toString().bn()} টি আইটেম কপি হয়েছে"
-                                        else "কপি করার মতো নতুন আইটেম নেই"
+                                        if (n > 0) "${n.toString().bn()} টি আইটেমের পরিমাণ কপি হয়েছে"
+                                        else "কপি করার মতো নতুন পরিমাণ নেই"
                                     )
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("এই তালিকার সব মুছুন") },
+                                text = { Text("সব পরিমাণ মুছুন") },
                                 onClick = { menuOpen = false; confirmClear = true }
                             )
                         }
@@ -181,7 +186,7 @@ fun BajarApp(vm: BajarViewModel = viewModel()) {
             ExtendedFloatingActionButton(
                 onClick = { showAdd = true },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("আইটেম যোগ") }
+                text = { Text("নতুন আইটেম") }
             )
         }
     ) { padding ->
@@ -212,45 +217,30 @@ fun BajarApp(vm: BajarViewModel = viewModel()) {
                 onPick = if (vm.tab == 0) ({ showDatePicker = true }) else null
             )
 
-            if (list.isNotEmpty()) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            "মোট ${list.size.toString().bn()} টি আইটেম",
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                        Text(
-                            "কেনা হয়েছে ${boughtCount.toString().bn()} টি",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    LinearProgressIndicator(
-                        progress = { boughtCount.toFloat() / list.size },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp)
+            if (rows.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "মোট ${rows.size.toString().bn()} টি আইটেম",
+                        style = MaterialTheme.typography.labelLarge
                     )
-                    if (unsetCount > 0) {
-                        Text(
-                            "পরিমাণ দেওয়া হয়নি: ${unsetCount.toString().bn()} টি (PDF-এ আসবে না)",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
+                    Text(
+                        "পরিমাণ দেওয়া হয়েছে ${setCount.toString().bn()} টি",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
 
-            if (list.isEmpty()) {
+            if (rows.isEmpty()) {
                 EmptyState(
-                    message = if (vm.tab == 0) "আজকের বাজারের তালিকা খালি।\nনিচের “আইটেম যোগ” চাপুন।"
-                    else "এই মাসের বাজারের তালিকা খালি।\nডেমো তালিকা লোড করুন, অথবা নিচের “আইটেম যোগ” চাপুন।",
-                    actionLabel = if (vm.tab == 1) "ডেমো তালিকা লোড করুন" else null,
-                    onAction = if (vm.tab == 1) ({ vm.loadMonthlyTemplate() }) else null
+                    message = "এই তালিকায় কোনো আইটেম নেই।\nসেটিংস থেকে আইটেম যোগ করুন।",
+                    actionLabel = "সেটিংসে যান",
+                    onAction = onOpenSettings
                 )
             } else {
                 LazyColumn(
@@ -258,48 +248,30 @@ fun BajarApp(vm: BajarViewModel = viewModel()) {
                     contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(list, key = { it.id }) { item ->
-                        ItemRow(
-                            item = item,
-                            onToggle = { vm.toggle(item.id) },
-                            onEdit = { editing = item },
-                            onDelete = {
-                                vm.delete(item.id)
-                                scope.launch {
-                                    snackbar.currentSnackbarData?.dismiss()
-                                    val result = snackbar.showSnackbar(
-                                        message = "“${item.name}” মুছে ফেলা হয়েছে",
-                                        actionLabel = "ফিরিয়ে আনুন"
-                                    )
-                                    if (result == SnackbarResult.ActionPerformed) vm.restore(item)
-                                }
-                            }
-                        )
+                    items(rows, key = { it.catalogId }) { row ->
+                        ItemRow(row = row, onClick = { editingRow = row })
                     }
                 }
             }
         }
     }
 
-    // ---- নতুন আইটেম ----
+    // ---- + button: notun item ----
     if (showAdd) {
-        ItemDialog(
-            initial = null,
-            suggestions = vm.suggestions,
+        AddItemDialog(
             onDismiss = { showAdd = false },
-            onSave = { n, q, u -> vm.addItem(n, q, u) }
+            onSave = { n, q, u -> vm.addNewItem(n, q, u) }
         )
     }
 
-    // ---- আইটেম এডিট ----
-    editing?.let { item ->
-        ItemDialog(
-            initial = item,
-            suggestions = vm.suggestions,
-            onDismiss = { editing = null },
-            onSave = { n, q, u ->
-                vm.editItem(item.id, n, q, u)
-                editing = null
+    // ---- item-e chaple: shudhu poriman ----
+    editingRow?.let { row ->
+        QuantityDialog(
+            row = row,
+            onDismiss = { editingRow = null },
+            onSave = { q, u ->
+                vm.setQuantity(row.name, q, u)
+                editingRow = null
             }
         )
     }
@@ -327,12 +299,14 @@ fun BajarApp(vm: BajarViewModel = viewModel()) {
         }
     }
 
-    // ---- সব মুছার নিশ্চিতকরণ ----
+    // ---- সব পরিমাণ মুছার নিশ্চিতকরণ ----
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("সব আইটেম মুছবেন?") },
-            text = { Text("${vm.periodLabel()} এর তালিকার সব আইটেম মুছে যাবে।") },
+            title = { Text("সব পরিমাণ মুছবেন?") },
+            text = {
+                Text("${vm.periodLabel()} এর সব আইটেমের পরিমাণ মুছে যাবে। আইটেমের তালিকা (সেটিংস) ঠিক থাকবে।")
+            },
             confirmButton = {
                 TextButton(onClick = {
                     vm.clearCurrent()
