@@ -31,7 +31,22 @@ jobs:
           test $(stat -c %s $F/hand_bold.ttf) -gt 50000
 
       - name: Build debug APK
-        run: gradle assembleDebug --no-daemon
+        shell: bash
+        run: gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
+
+      - name: Show errors (only when build fails)
+        if: failure()
+        shell: bash
+        run: |
+          echo "=============== ERRORS ==============="
+          grep -E "^e: |error:|What went wrong|Execution failed|Could not " -A4 build.log | head -150 || true
+
+      - name: Upload full log (only when build fails)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
 
       - uses: actions/upload-artifact@v4
         with:
